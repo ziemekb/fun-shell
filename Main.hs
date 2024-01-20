@@ -2,39 +2,42 @@ import Control.Monad
 import System.IO
 import Data.Char
 
+data Token = NULL | AND | OR | PIPE | BGJOB | CMD String
+    deriving (Show)
+
 prompt :: IO ()
 prompt = putStr "#> "
 
-{--
--- Here lexical tokenization takes place
-parse :: String -> [t]
-parse s = concatMap 
+tokenMapping :: String -> Token
+tokenMapping "&&" = AND
+tokenMapping "||" = OR
+tokenMapping "|"  = PIPE
+tokenMapping "&"  = BGJOB
+tokenMapping cmd  = CMD cmd
 
--- Here interpretation of the token or some abstract syntax
-interpret :: [t] -> ()
-interpret a = ()
---}
+tokenize :: String -> IO ([Token])
+tokenize str = do
+                let tokens = words str
+                return $ map tokenMapping tokens
 
-readLine :: IO (String)
-readLine = 
-        do 
-            input <- getLine
-            return $ map (\c -> if isSpace c then '\0' else c) input
-
-mainLoop :: IO ()
-mainLoop = do
+readLoop :: IO ()
+readLoop = do
         prompt
         eof <- isEOF
         if eof 
             then return () 
             else do 
-                input <- readLine
+                input <- getLine
                 putStrLn input
-                mainLoop
+                tokens <- tokenize input
+                putStrLn $ showList tokens ""
+                readLoop
 
 main :: IO ()
 main = do 
         hSetBuffering stdin LineBuffering
         tdevin  <- hIsTerminalDevice stdin
         tdevout <- hIsTerminalDevice stdout
-        if tdevin && tdevout then mainLoop else return ()
+        if tdevin && tdevout 
+            then readLoop 
+            else return ()
