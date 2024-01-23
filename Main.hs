@@ -25,7 +25,9 @@ readLoop = do
         prompt
         eof <- isEOF
         if eof 
-            then return () 
+            then do
+                putStrLn ""
+                return () 
             else do 
                 input <- getLine
                 putStrLn input
