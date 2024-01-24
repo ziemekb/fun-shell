@@ -1,5 +1,6 @@
 import System.Directory
 import System.Environment
+import System.Posix.Process
 
 data Builtin = CD | PWD -- | EXIT | PWD | KILL | BG | FG | JOBS
     deriving (Show)
@@ -29,3 +30,8 @@ splitOnDel s c =
     let res = foldl (\acc x -> if x == c then "" : acc else (x : head acc) : tail acc) [""] s in
     map reverse res
 
+execute_external :: [String] -> IO ([String])
+execute_external cmd = do
+    env <- getEnv "PATH"
+    let bins =  splitOnDel env ':'
+    executeFile (head cmd) True (tail cmd) Nothing
