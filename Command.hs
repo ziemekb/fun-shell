@@ -1,4 +1,5 @@
 import System.Directory
+import System.Environment
 
 data Builtin = CD | PWD -- | EXIT | PWD | KILL | BG | FG | JOBS
     deriving (Show)
@@ -22,4 +23,9 @@ pwd args = do
         path <- getCurrentDirectory
         putStrLn path
         return 0
+
+splitOnDel :: String -> Char -> [String]
+splitOnDel s c =
+    let res = foldl (\acc x -> if x == c then "" : acc else (x : head acc) : tail acc) [""] s in
+    map reverse res
 
