@@ -25,13 +25,9 @@ pwd args = do
         putStrLn path
         return 0
 
-splitOnDel :: String -> Char -> [String]
-splitOnDel s c =
-    let res = foldl (\acc x -> if x == c then "" : acc else (x : head acc) : tail acc) [""] s in
-    map reverse res
-
 execute_external :: [String] -> IO ([String])
-execute_external cmd = do
-    env <- getEnv "PATH"
-    let bins =  splitOnDel env ':'
-    executeFile (head cmd) True (tail cmd) Nothing
+execute_external (cmd:args) = do
+    if elem '/' cmd
+        then executeFile cmd False args Nothing
+        else executeFile cmd True args Nothing
+
