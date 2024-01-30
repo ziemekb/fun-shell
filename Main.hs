@@ -3,6 +3,7 @@ import System.IO
 import Data.Char
 import System.Posix.Process
 import System.Posix.Signals
+import System.Posix.Terminal
 import qualified GHC.IO.FD as FDOps
 import Foreign.C.Types
 
@@ -29,7 +30,9 @@ tokenize str = do
 
 waitForTerminal :: IO ()
 waitForTerminal = do
-    if getTerminalProcessGroupID stdin /= getCurrentPid
+    ttypgid <- getTerminalProcessGroupID 0
+    pgid    <- getProcessGroupID
+    if ttypgid /= pgid
         then waitForTerminal
         else return ()
     
@@ -38,11 +41,15 @@ launchJob :: Command -> Exitcode
 launchJob cmd = do
     id <- forkProcess $ do
         createProcessGroupFor 0 
+        _ <- installHandler sigTSTP Default $ Just mask
+        _ <- installHandler sigTTOU Default $ Just mask
+        _ <- installHandler sigTTIN Default $ Just mask
+        _ <- installHandler sigINT  Default $ Just mask
+        _ <- installHandler sigQUIT Default $ Just mask
+        _ <- installHandler sigCHLD Default $ Just mask
+        waitForTermiinal 
     let stdinFD = FDOps.fdFD FDOps.stdin -- file descriptor of standard input
     let mask = emptySignalSet
-    _ <- installHandler sigTSTP Ignore $ Just mask
-    _ <- installHandler sigTTOU Ignore $ Just mask
-    _ <- installHandler sigTTIN Ignore $ Just mask
     createProcessGroup id
     setTerminalProcessGroupID stdinFD id
 --}
@@ -74,7 +81,6 @@ main = do
     _ <- installHandler sigINT  Ignore $ Just mask
     _ <- installHandler sigQUIT Ignore $ Just mask
     _ <- installHandler sigCHLD Ignore $ Just mask
-    print $ inSignalSet sigTTOU mask
     if tdevin && tdevout 
         then readLoop 
         else return ()
