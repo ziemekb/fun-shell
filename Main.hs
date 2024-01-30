@@ -8,26 +8,30 @@ import qualified GHC.IO.FD as FDOps
 import Foreign.C.Types
 import Command
 
-data Token = NULL | AND | OR | PIPE | BGJOB | WORD String
+data Token = NULL | AND | OR | PIPE | BGJOB | COMMAND [String]
     deriving (Show)
 
-type Command  = [String]
 type Exitcode = Int
 
 prompt :: IO ()
 prompt = putStr "#> "
 
-tokenMapping :: String -> Token
-tokenMapping "&&" = AND
-tokenMapping "||" = OR
-tokenMapping "|"  = PIPE
-tokenMapping "&"  = BGJOB
-tokenMapping word = WORD word 
+tokenize :: String -> [Token]
+tokenize line = 
+    strToTok (words line) []
 
-tokenize :: String -> IO ([Token])
-tokenize str = do
-    let tokens = words str
-    return $ map tokenMapping tokens
+strToTok :: [String] -> [String] -> [Token]
+strToTok [] []            = []
+strToTok [] acc           = [COMMAND (reverse acc)]
+strToTok ("&&": args) []  = AND   : strToTok args []
+strToTok ("||": args) []  = OR    : strToTok args []
+strToTok ("|" : args) []  = PIPE  : strToTok args []
+strToTok ("&" : args) []  = BGJOB : strToTok args []
+strToTok ("&&": args) acc = COMMAND (reverse acc) : AND   : strToTok args []
+strToTok ("||": args) acc = COMMAND (reverse acc) : OR    : strToTok args []
+strToTok ("|" : args) acc = COMMAND (reverse acc) : PIPE  : strToTok args []
+strToTok ("&" : args) acc = COMMAND (reverse acc) : BGJOB : strToTok args [] 
+strToTok (cmd : args) acc = strToTok args $ cmd : acc
 
 waitForTerminal :: IO ()
 waitForTerminal = do
@@ -79,7 +83,7 @@ readLoop = do
         else do 
             input <- getLine
             putStrLn input
-            tokens <- tokenize input
+            let tokens = tokenize input
             putStrLn $ showList tokens ""
             readLoop
 
@@ -98,5 +102,3 @@ main = do
     if tdevin && tdevout 
         then readLoop 
         else return ()
-
-
