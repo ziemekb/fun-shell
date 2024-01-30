@@ -2,14 +2,15 @@ module Command where
 import System.Directory
 import System.Environment
 import System.Posix.Process
+import System.Exit
 
-data Builtin = CD | PWD -- | EXIT | PWD | KILL | BG | FG | JOBS
+data Builtin = CD | PWD | EXIT -- | KILL | BG | FG | JOBS
     deriving (Show)
 
 cmdMapping :: Builtin -> ([String] -> IO Int)
 cmdMapping CD   = cd
--- cmdMapping EXIT = exit
-cmdMapping PWD = pwd
+cmdMapping EXIT = exit
+cmdMapping PWD  = pwd
 -- cmdMapping KILL = kill
 
 -- TO DO: ERROR HANDLING
@@ -19,6 +20,9 @@ cd :: [String] -> IO Int
 cd (filepath:args) = do
                     setCurrentDirectory filepath  
                     return 0
+
+exit :: [String] -> IO Int 
+exit args = exitSuccess
     
 pwd :: [String] -> IO Int 
 pwd args = do 
