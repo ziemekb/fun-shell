@@ -1,3 +1,4 @@
+module Command where
 import System.Directory
 import System.Environment
 import System.Posix.Process
@@ -25,8 +26,8 @@ pwd args = do
         putStrLn path
         return 0
 
-execute_external :: [String] -> IO ([String])
-execute_external (cmd:args) = do
+executeExternal :: [String] -> IO ()
+executeExternal (cmd:args) = do
     if elem '/' cmd
         then executeFile cmd False args Nothing
         else executeFile cmd True args Nothing

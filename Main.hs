@@ -6,6 +6,7 @@ import System.Posix.Signals
 import System.Posix.Terminal
 import qualified GHC.IO.FD as FDOps
 import Foreign.C.Types
+import Command
 
 data Token = NULL | AND | OR | PIPE | BGJOB | WORD String
     deriving (Show)
@@ -36,23 +37,36 @@ waitForTerminal = do
         then waitForTerminal
         else return ()
     
-{--
-launchJob :: Command -> Exitcode
+launchJob :: [String] -> IO ()
 launchJob cmd = do
+    {--
+     - necessary to get back control of terminal
+    let mask = emptySignalSet
+    _ <- installHandler sigTTOU Ignore $ Just mask
+    _ <- installHandler sigTTIN Ignore $ Just mask
+    --}
+    --command <- cmd 
     id <- forkProcess $ do
         createProcessGroupFor 0 
-        _ <- installHandler sigTSTP Default $ Just mask
-        _ <- installHandler sigTTOU Default $ Just mask
-        _ <- installHandler sigTTIN Default $ Just mask
-        _ <- installHandler sigINT  Default $ Just mask
-        _ <- installHandler sigQUIT Default $ Just mask
-        _ <- installHandler sigCHLD Default $ Just mask
-        waitForTermiinal 
+        let saMask = emptySignalSet
+        _ <- installHandler sigTSTP Default $ Just saMask
+        _ <- installHandler sigTTOU Default $ Just saMask
+        _ <- installHandler sigTTIN Default $ Just saMask
+        _ <- installHandler sigINT  Default $ Just saMask
+        _ <- installHandler sigQUIT Default $ Just saMask
+        _ <- installHandler sigCHLD Default $ Just saMask
+        _ <- waitForTerminal 
+        executeExternal cmd --command
     let stdinFD = FDOps.fdFD FDOps.stdin -- file descriptor of standard input
-    let mask = emptySignalSet
-    createProcessGroup id
-    setTerminalProcessGroupID stdinFD id
---}
+    createProcessGroupFor id
+    setTerminalProcessGroupID 0 id -- stdinFD id
+    -- wait for job 
+    status <- getProcessStatus True True id
+    pgid <- getProcessGroupID
+    -- get back control of the terminal
+    setTerminalProcessGroupID 0 pgid -- stdinFD pgid
+    -- putStrLn "Done"
+    return () 
 
 readLoop :: IO ()
 readLoop = do
