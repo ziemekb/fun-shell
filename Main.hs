@@ -41,15 +41,8 @@ waitForTerminal = do
         then waitForTerminal
         else return ()
     
-launchJob :: [String] -> IO ()
-launchJob cmd = do
-    {--
-     - necessary to get back control of terminal
-    let mask = emptySignalSet
-    _ <- installHandler sigTTOU Ignore $ Just mask
-    _ <- installHandler sigTTIN Ignore $ Just mask
-    --}
-    --command <- cmd 
+launchJob :: Token -> IO ()
+launchJob (COMMAND cmd) = do
     id <- forkProcess $ do
         createProcessGroupFor 0 
         let saMask = emptySignalSet
@@ -57,20 +50,19 @@ launchJob cmd = do
         _ <- installHandler sigTTOU Default $ Just saMask
         _ <- installHandler sigTTIN Default $ Just saMask
         _ <- installHandler sigINT  Default $ Just saMask
-        _ <- installHandler sigQUIT Default $ Just saMask
-        _ <- installHandler sigCHLD Default $ Just saMask
         _ <- waitForTerminal 
         executeExternal cmd --command
     let stdinFD = FDOps.fdFD FDOps.stdin -- file descriptor of standard input
     createProcessGroupFor id
     setTerminalProcessGroupID 0 id -- stdinFD id
-    -- wait for job 
+    -- wait for process
+    -- pair <- getAnyProcessStatus True True
     status <- getProcessStatus True True id
     pgid <- getProcessGroupID
     -- get back control of the terminal
     setTerminalProcessGroupID 0 pgid -- stdinFD pgid
-    -- putStrLn "Done"
     return () 
+launchJob _ = return ()
 
 readLoop :: IO ()
 readLoop = do
@@ -82,9 +74,10 @@ readLoop = do
             return () 
         else do 
             input <- getLine
-            putStrLn input
+            --putStrLn input
             let tokens = tokenize input
-            putStrLn $ showList tokens ""
+            _ <- launchJob $ head tokens
+            --putStrLn $ showList tokens ""
             readLoop
 
 main :: IO ()
@@ -97,8 +90,6 @@ main = do
     _ <- installHandler sigTTOU Ignore $ Just mask
     _ <- installHandler sigTTIN Ignore $ Just mask
     _ <- installHandler sigINT  Ignore $ Just mask
-    _ <- installHandler sigQUIT Ignore $ Just mask
-    _ <- installHandler sigCHLD Ignore $ Just mask
     if tdevin && tdevout 
         then readLoop 
         else return ()
