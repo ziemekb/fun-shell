@@ -1,6 +1,8 @@
 import Control.Monad
 import System.IO
 import Data.Char
+import System.Directory
+import System.FilePath
 import System.Posix.Process
 import System.Posix.Signals
 import System.Posix.Terminal
@@ -10,7 +12,12 @@ import Command
 import Lexer
 
 prompt :: IO ()
-prompt = putStr "#> "
+prompt = do
+    cwd <- getCurrentDirectory
+    let dir = takeBaseName cwd
+    putStr dir
+    putStr " #> "
+
 
 waitForTerminal :: IO ()
 waitForTerminal = do

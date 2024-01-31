@@ -3,7 +3,6 @@ import System.Directory
 import System.Environment
 import System.Posix.Process
 import System.Exit
-import Lexer
 
 cmdMapping :: String -> ([String] -> IO Int)
 cmdMapping "cd"   = cd
@@ -33,9 +32,9 @@ pwd args = do
         putStrLn path
         return 0
 
-executeBuiltin :: Token -> IO Int
+executeBuiltin :: [String] -> IO Int
 executeBuiltin (cmd:options) = 
-    cmdMapping (head cmd) (tail cmd)
+    cmdMapping cmd options 
 executeBuiltin _ = return (-1)
 
 executeExternal :: [String] -> IO ()
