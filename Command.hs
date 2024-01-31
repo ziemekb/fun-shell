@@ -3,6 +3,7 @@ import System.Directory
 import System.Environment
 import System.Posix.Process
 import System.Exit
+import Lexer
 
 data Builtin = CD | PWD | EXIT -- | KILL | BG | FG | JOBS
     deriving (Show)

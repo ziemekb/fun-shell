@@ -7,31 +7,10 @@ import System.Posix.Terminal
 import qualified GHC.IO.FD as FDOps
 import Foreign.C.Types
 import Command
-
-data Token = NULL | AND | OR | PIPE | BGJOB | COMMAND [String]
-    deriving (Show)
-
-type Exitcode = Int
+import Lexer
 
 prompt :: IO ()
 prompt = putStr "#> "
-
-tokenize :: String -> [Token]
-tokenize line = 
-    strToTok (words line) []
-
-strToTok :: [String] -> [String] -> [Token]
-strToTok [] []            = []
-strToTok [] acc           = [COMMAND (reverse acc)]
-strToTok ("&&": args) []  = AND   : strToTok args []
-strToTok ("||": args) []  = OR    : strToTok args []
-strToTok ("|" : args) []  = PIPE  : strToTok args []
-strToTok ("&" : args) []  = BGJOB : strToTok args []
-strToTok ("&&": args) acc = COMMAND (reverse acc) : AND   : strToTok args []
-strToTok ("||": args) acc = COMMAND (reverse acc) : OR    : strToTok args []
-strToTok ("|" : args) acc = COMMAND (reverse acc) : PIPE  : strToTok args []
-strToTok ("&" : args) acc = COMMAND (reverse acc) : BGJOB : strToTok args [] 
-strToTok (cmd : args) acc = strToTok args $ cmd : acc
 
 waitForTerminal :: IO ()
 waitForTerminal = do
@@ -41,8 +20,8 @@ waitForTerminal = do
         then waitForTerminal
         else return ()
     
-launchJob :: Token -> IO ()
-launchJob (COMMAND cmd) = do
+launchJob :: Token -> Bool -> IO ()
+launchJob (COMMAND cmd) bg = do
     id <- forkProcess $ do
         createProcessGroupFor 0 
         let saMask = emptySignalSet
@@ -54,15 +33,14 @@ launchJob (COMMAND cmd) = do
         executeExternal cmd --command
     let stdinFD = FDOps.fdFD FDOps.stdin -- file descriptor of standard input
     createProcessGroupFor id
-    setTerminalProcessGroupID 0 id -- stdinFD id
+    setTerminalProcessGroupID 0 id 
     -- wait for process
-    -- pair <- getAnyProcessStatus True True
     status <- getProcessStatus True True id
     pgid <- getProcessGroupID
     -- get back control of the terminal
-    setTerminalProcessGroupID 0 pgid -- stdinFD pgid
+    setTerminalProcessGroupID 0 pgid 
     return () 
-launchJob _ = return ()
+launchJob _ bg = return ()
 
 readLoop :: IO ()
 readLoop = do
@@ -76,7 +54,7 @@ readLoop = do
             input <- getLine
             --putStrLn input
             let tokens = tokenize input
-            _ <- launchJob $ head tokens
+            _ <- launchJob (head tokens) False
             --putStrLn $ showList tokens ""
             readLoop
 
