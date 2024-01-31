@@ -5,25 +5,22 @@ import System.Posix.Process
 import System.Exit
 import Lexer
 
-data Builtin = CD | PWD | EXIT -- | KILL | BG | FG | JOBS
-    deriving (Show)
-
-cmdMapping :: Builtin -> ([String] -> IO Int)
-cmdMapping CD   = cd
-cmdMapping EXIT = exit
-cmdMapping PWD  = pwd
--- cmdMapping KILL = kill
+cmdMapping :: String -> ([String] -> IO Int)
+cmdMapping "cd"   = cd
+cmdMapping "exit" = exit
+cmdMapping "pwd"  = pwd
+-- cmdMapping "kill" = kill
 
 -- TO DO: ERROR HANDLING
 -- TO DO: ADD ARGUMENTS HANDLING
 
-isBuiltin :: Token -> Bool
-isBuiltin (COMMAND cmd) = 
-    elem (head cmd) ["cd", "pwd", "exit"]
+isBuiltin :: [String] -> Bool
+isBuiltin (cmd:options)  = 
+    elem cmd ["cd", "pwd", "exit"]
 isBuiltin _ = False
 
 cd :: [String] -> IO Int
-cd (filepath:args) = do
+cd (filepath:options) = do
                     setCurrentDirectory filepath  
                     return 0
 
@@ -36,9 +33,13 @@ pwd args = do
         putStrLn path
         return 0
 
-executeExternal :: [String] -> IO ()
-executeExternal (cmd:args) = do
-    if elem '/' cmd
-        then executeFile cmd False args Nothing
-        else executeFile cmd True args Nothing
+executeBuiltin :: Token -> IO Int
+executeBuiltin (cmd:options) = 
+    cmdMapping (head cmd) (tail cmd)
+executeBuiltin _ = return (-1)
 
+executeExternal :: [String] -> IO ()
+executeExternal (cmd:options) = do
+    if elem '/' cmd
+        then executeFile cmd False options Nothing
+        else executeFile cmd True  options Nothing
