@@ -18,7 +18,6 @@ prompt = do
     putStr dir
     putStr " #> "
 
-
 waitForTerminal :: IO ()
 waitForTerminal = do
     ttypgid <- getTerminalProcessGroupID 0
@@ -28,25 +27,29 @@ waitForTerminal = do
         else return ()
     
 launchJob :: Token -> Bool -> IO ()
-launchJob (COMMAND cmd) bg = do
-    id <- forkProcess $ do
-        createProcessGroupFor 0 
-        let saMask = emptySignalSet
-        _ <- installHandler sigTSTP Default $ Just saMask
-        _ <- installHandler sigTTOU Default $ Just saMask
-        _ <- installHandler sigTTIN Default $ Just saMask
-        _ <- installHandler sigINT  Default $ Just saMask
-        _ <- waitForTerminal 
-        executeExternal cmd --command
-    let stdinFD = FDOps.fdFD FDOps.stdin -- file descriptor of standard input
-    createProcessGroupFor id
-    setTerminalProcessGroupID 0 id 
-    -- wait for process
-    status <- getProcessStatus True True id
-    pgid <- getProcessGroupID
-    -- get back control of the terminal
-    setTerminalProcessGroupID 0 pgid 
-    return () 
+launchJob (COMMAND cmd) bg 
+    | isBuiltin cmd = do 
+        exitcode <- executeBuiltin cmd
+        return ()
+    | otherwise     = do
+        id <- forkProcess $ do
+            createProcessGroupFor 0 
+            let saMask = emptySignalSet
+            _ <- installHandler sigTSTP Default $ Just saMask
+            _ <- installHandler sigTTOU Default $ Just saMask
+            _ <- installHandler sigTTIN Default $ Just saMask
+            _ <- installHandler sigINT  Default $ Just saMask
+            _ <- waitForTerminal 
+            executeExternal cmd 
+        let stdinFD = FDOps.fdFD FDOps.stdin -- file descriptor of standard input
+        createProcessGroupFor id
+        setTerminalProcessGroupID 0 id 
+        -- wait for process
+        status <- getProcessStatus True True id
+        pgid <- getProcessGroupID
+        -- get back control of the terminal
+        setTerminalProcessGroupID 0 pgid 
+        return () 
 launchJob _ bg = return ()
 
 readLoop :: IO ()
