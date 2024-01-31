@@ -17,6 +17,11 @@ cmdMapping PWD  = pwd
 -- TO DO: ERROR HANDLING
 -- TO DO: ADD ARGUMENTS HANDLING
 
+isBuiltin :: Token -> Bool
+isBuiltin (COMMAND cmd) = 
+    elem (head cmd) ["cd", "pwd", "exit"]
+isBuiltin _ = False
+
 cd :: [String] -> IO Int
 cd (filepath:args) = do
                     setCurrentDirectory filepath  
