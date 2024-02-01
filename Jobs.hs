@@ -41,9 +41,22 @@ launchJob (cmd, bg)
         setTerminalProcessGroupID 0 pgid
         return ()
 
+-- temporary solution for waiting for children without job control
+waitForChildren :: Int -> IO ()
+waitForChildren n
+    | n == 0    = return ()
+    | otherwise = do 
+        getProcessStatus True True (-1)
+        waitForChildren $ n - 1
+
 launchPipeline :: (Pipeline, Background) -> IO ()
 launchPipeline (pipe, bg) = do 
     pipelineLoop 0 Nothing pipe
+    waitForChildren $ length pipe
+    -- status <- getProcessStatus True True (-1)
+    pgid <- getProcessGroupID
+    setTerminalProcessGroupID 0 pgid
+    return ()
 
 pipelineLoop :: ProcessGroupID -> (Maybe Fd) -> Pipeline -> IO ()
 pipelineLoop pgid (Just fd) (cmd:[]) = do 
@@ -80,7 +93,4 @@ pipeProcess pgid (fdIn, fdOut) cmd = do
     setProcessGroupIDOf id pgid
     setTerminalProcessGroupID stdInput newPgid
     return newPgid
-
-
-
 
