@@ -2,6 +2,7 @@ import System.IO
 import System.Directory
 import System.FilePath
 import System.Posix.Signals
+import Data.Either
 import Command
 import Lexer
 import Jobs
@@ -13,12 +14,10 @@ prompt = do
     putStr dir
     putStr " #> "
 
-eval :: [Token] -> IO () 
-eval tokens 
-    | bg == True = launchJob (head $ reverse $ tail revToks) bg 
-    | otherwise  = launchJob (head $ reverse revToks) bg
-    where revToks = reverse tokens
-          bg      = head revToks == BG
+eval :: (Command, Background) -> IO () 
+eval (cmd, bg)
+    | isLeft cmd = launchJob (fromLeft [] cmd, bg)
+    | otherwise  = return () -- launchPipeline (fromRight [] cmd, bg) 
 
 readLoop :: IO ()
 readLoop = do

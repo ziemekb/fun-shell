@@ -13,8 +13,8 @@ waitForTerminal = do
         then waitForTerminal
         else return ()
 
-launchJob :: Token -> Bool -> IO ()
-launchJob (COMMAND cmd) bg
+launchJob :: (SingleCommand, Background) -> IO ()
+launchJob (cmd, bg) 
     | isBuiltin cmd = do
         exitcode <- executeBuiltin cmd
         return ()
@@ -36,4 +36,3 @@ launchJob (COMMAND cmd) bg
         -- get back control of the terminal
         setTerminalProcessGroupID 0 pgid
         return ()
-launchJob _ bg = return ()

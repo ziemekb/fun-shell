@@ -6,8 +6,7 @@ type SingleCommand = [String]
 type Pipeline      = [SingleCommand]
 type Command       = Either SingleCommand Pipeline
 -- type FilePath = String  
--- data Redirection = (Input FilePath) Command  (Output FilePath) |
---                    (Input FilePath) Pipeline (Output FilePath)
+-- data Redirection = (Input FilePath) Command  (Output FilePath)
 
 splitByDelimiter :: Eq a => a -> [a] -> [[a]]
 splitByDelimiter delimiter = filter (not . null) . groupBy (\x y -> y /= delimiter) 
