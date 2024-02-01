@@ -43,18 +43,20 @@ launchJob (cmd, bg)
 
 launchPipeline :: (Pipeline, Background) -> IO ()
 launchPipeline (pipe, bg) = do 
-    let mask = emptySignalSet
-    _ <- installHandler sigTSTP Ignore $ Just mask
-    _ <- installHandler sigTTOU Ignore $ Just mask
     pipelineLoop 0 Nothing pipe
 
 pipelineLoop :: ProcessGroupID -> (Maybe Fd) -> Pipeline -> IO ()
-pipelineLoop pgid input (cmd:[]) = do 
-    pipeProcess pgid (input, Nothing) cmd
+pipelineLoop pgid (Just fd) (cmd:[]) = do 
+    pipeProcess pgid ((Just fd), Nothing) cmd
+    closeFd fd
     return ()
 pipelineLoop pgid input (cmd:rest) = do
     (nextInput, output) <- createPipe
     newPgid <- pipeProcess pgid (input, (Just output)) cmd
+    case input of
+        Just fd -> closeFd fd
+        Nothing -> return ()
+    closeFd output
     pipelineLoop newPgid (Just nextInput) rest
 
 pipeFd :: (Maybe Fd) -> Fd -> IO ()

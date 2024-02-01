@@ -17,7 +17,7 @@ prompt = do
 eval :: (Command, Background) -> IO () 
 eval (cmd, bg)
     | isLeft cmd = launchJob (fromLeft [] cmd, bg)
-    | otherwise  = return () -- launchPipeline (fromRight [] cmd, bg) 
+    | otherwise  = launchPipeline (fromRight [] cmd, bg) 
 
 readLoop :: IO ()
 readLoop = do
