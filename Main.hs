@@ -18,7 +18,7 @@ eval tokens
     | bg == True = launchJob (head $ reverse $ tail revToks) bg 
     | otherwise  = launchJob (head $ reverse revToks) bg
     where revToks = reverse tokens
-          bg = head revToks == BG
+          bg      = head revToks == BG
 
 readLoop :: IO ()
 readLoop = do
