@@ -2,6 +2,10 @@ module Jobs where
 import System.Posix.Signals
 import System.Posix.Process
 import System.Posix.Terminal
+import System.Posix.IO
+import System.Posix.Types
+import Data.Maybe
+import Data.Monoid
 import Command
 import Lexer
 
@@ -36,3 +40,36 @@ launchJob (cmd, bg)
         -- get back control of the terminal
         setTerminalProcessGroupID 0 pgid
         return ()
+
+{--
+launchPipeline :: (Pipeline, Background) -> IO ()
+launchPipeline (pipe, bg) = do
+    (nextInput, output) <- createPipeFd
+    pipeProcess pgid input output
+--}
+
+pipeFd :: (Maybe Fd) -> Fd -> IO ()
+pipeFd (Just fd1) fd2 = dupTo fd1 fd2 >> closeFd fd1 
+pipeFd Nothing    fd2 = return ()
+
+pipeProcess :: ProcessGroupID -> (Maybe Fd, Maybe Fd) -> SingleCommand -> IO ()
+pipeProcess pgid (fdIn, fdOut) cmd = do
+    id <- forkProcess $ do
+        joinProcessGroup pgid
+        let saMask = emptySignalSet
+        _ <- installHandler sigTSTP Default $ Just saMask
+        _ <- installHandler sigTTOU Default $ Just saMask
+        _ <- installHandler sigTTIN Default $ Just saMask
+        _ <- installHandler sigINT  Default $ Just saMask
+        _ <- waitForTerminal
+        pipeFd fdIn  stdInput
+        pipeFd fdOut stdOutput
+        executeExternal cmd
+    setProcessGroupIDOf id pgid
+    setTerminalProcessGroupID stdInput pgid
+    return ()
+        
+
+
+
+
