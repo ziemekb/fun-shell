@@ -41,18 +41,27 @@ launchJob (cmd, bg)
         setTerminalProcessGroupID 0 pgid
         return ()
 
-{--
 launchPipeline :: (Pipeline, Background) -> IO ()
-launchPipeline (pipe, bg) = do
-    (nextInput, output) <- createPipeFd
-    pipeProcess pgid input output
---}
+launchPipeline (pipe, bg) = do 
+    let mask = emptySignalSet
+    _ <- installHandler sigTSTP Ignore $ Just mask
+    _ <- installHandler sigTTOU Ignore $ Just mask
+    pipelineLoop 0 Nothing pipe
+
+pipelineLoop :: ProcessGroupID -> (Maybe Fd) -> Pipeline -> IO ()
+pipelineLoop pgid input (cmd:[]) = do 
+    pipeProcess pgid (input, Nothing) cmd
+    return ()
+pipelineLoop pgid input (cmd:rest) = do
+    (nextInput, output) <- createPipe
+    newPgid <- pipeProcess pgid (input, (Just output)) cmd
+    pipelineLoop newPgid (Just nextInput) rest
 
 pipeFd :: (Maybe Fd) -> Fd -> IO ()
 pipeFd (Just fd1) fd2 = dupTo fd1 fd2 >> closeFd fd1 
 pipeFd Nothing    fd2 = return ()
 
-pipeProcess :: ProcessGroupID -> (Maybe Fd, Maybe Fd) -> SingleCommand -> IO ()
+pipeProcess :: ProcessGroupID -> (Maybe Fd, Maybe Fd) -> SingleCommand -> IO (ProcessGroupID)
 pipeProcess pgid (fdIn, fdOut) cmd = do
     id <- forkProcess $ do
         joinProcessGroup pgid
@@ -65,10 +74,10 @@ pipeProcess pgid (fdIn, fdOut) cmd = do
         pipeFd fdIn  stdInput
         pipeFd fdOut stdOutput
         executeExternal cmd
+    let newPgid = if pgid == 0 then id else pgid
     setProcessGroupIDOf id pgid
-    setTerminalProcessGroupID stdInput pgid
-    return ()
-        
+    setTerminalProcessGroupID stdInput newPgid
+    return newPgid
 
 
 
