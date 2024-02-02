@@ -4,8 +4,11 @@ import System.Posix.Process
 import System.Posix.Terminal
 import System.Posix.IO
 import System.Posix.Types
+import System.Posix.Files
+import GHC.IO.Handle.FD
 import Data.Maybe
 import Data.Monoid
+import Data.Either
 import Command
 import Lexer
 
@@ -17,10 +20,41 @@ waitForTerminal = do
         then waitForTerminal
         else return ()
 
-launchJob :: (SingleCommand, Background) -> IO ()
-launchJob (cmd, bg) 
-    | isBuiltin cmd = do
-        exitcode <- executeBuiltin cmd
+inputFileModes :: Maybe FileMode
+inputFileModes = Just $ unionFileModes otherReadMode $
+                        unionFileModes ownerReadMode groupReadMode
+
+-- TO DO: refactor
+doRedir :: (Maybe FilePath, Maybe FilePath) -> IO ()
+doRedir (Nothing, Nothing) = return ()
+doRedir (Just input, Nothing) = do
+    inputFd  <- openFd input 
+                       ReadOnly 
+                       inputFileModes 
+                       defaultFileFlags
+    dupCloseFd (Just inputFd) stdInput 
+doRedir (Nothing, Just output) = do
+    outputFd <- openFd output 
+                       ReadWrite 
+                       (Just stdFileMode)
+                       defaultFileFlags
+    dupCloseFd (Just outputFd) stdOutput 
+doRedir (Just input, Just output) = do
+    inputFd  <- openFd input  
+                       ReadOnly  
+                       inputFileModes  
+                       defaultFileFlags 
+    outputFd <- openFd output 
+                       ReadWrite 
+                       (Just stdFileMode) 
+                       defaultFileFlags 
+    dupCloseFd (Just inputFd)  stdInput
+    dupCloseFd (Just outputFd) stdOutput
+
+launchJob :: (Command, Background) -> IO ()
+launchJob (command, bg) 
+    | isBuiltin singleCmd = do
+        exitcode <- executeBuiltin singleCmd
         return ()
     | otherwise     = do
         id <- forkProcess $ do
@@ -31,7 +65,9 @@ launchJob (cmd, bg)
             _ <- installHandler sigTTIN Default $ Just saMask
             _ <- installHandler sigINT  Default $ Just saMask
             _ <- waitForTerminal
-            executeExternal cmd
+            --print outputPath
+            doRedir (inputPath, outputPath)
+            executeExternal singleCmd
         createProcessGroupFor id
         setTerminalProcessGroupID 0 id
         -- wait for process
@@ -40,6 +76,9 @@ launchJob (cmd, bg)
         -- get back control of the terminal
         setTerminalProcessGroupID 0 pgid
         return ()
+    where singleCmd  = fromLeft [] $ cmd command
+          inputPath  = input command
+          outputPath = output command
 
 -- temporary solution for waiting for children without job control
 waitForChildren :: Int -> IO ()
@@ -49,8 +88,9 @@ waitForChildren n
         getProcessStatus True True (-1)
         waitForChildren $ n - 1
 
-launchPipeline :: (Pipeline, Background) -> IO ()
-launchPipeline (pipe, bg) = do 
+launchPipeline :: (Command, Background) -> IO ()
+launchPipeline (command, bg) = do 
+    let pipe = fromRight [] $ cmd command
     pipelineLoop 0 Nothing pipe
     waitForChildren $ length pipe
     -- status <- getProcessStatus True True (-1)
@@ -72,9 +112,9 @@ pipelineLoop pgid input (cmd:rest) = do
     closeFd output
     pipelineLoop newPgid (Just nextInput) rest
 
-pipeFd :: (Maybe Fd) -> Fd -> IO ()
-pipeFd (Just fd1) fd2 = dupTo fd1 fd2 >> closeFd fd1 
-pipeFd Nothing    fd2 = return ()
+dupCloseFd :: (Maybe Fd) -> Fd -> IO ()
+dupCloseFd (Just fd1) fd2 = dupTo fd1 fd2 >> closeFd fd1 
+dupCloseFd Nothing    fd2 = return ()
 
 pipeProcess :: ProcessGroupID -> (Maybe Fd, Maybe Fd) -> SingleCommand -> IO (ProcessGroupID)
 pipeProcess pgid (fdIn, fdOut) cmd = do
@@ -86,8 +126,8 @@ pipeProcess pgid (fdIn, fdOut) cmd = do
         _ <- installHandler sigTTIN Default $ Just saMask
         _ <- installHandler sigINT  Default $ Just saMask
         _ <- waitForTerminal
-        pipeFd fdIn  stdInput
-        pipeFd fdOut stdOutput
+        dupCloseFd fdIn  stdInput
+        dupCloseFd fdOut stdOutput
         executeExternal cmd
     let newPgid = if pgid == 0 then id else pgid
     setProcessGroupIDOf id pgid
