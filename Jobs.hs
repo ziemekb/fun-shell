@@ -20,23 +20,25 @@ waitForTerminal = do
         then waitForTerminal
         else return ()
 
-doInputRedir :: (Maybe FilePath) -> IO ()
-doInputRedir Nothing = return ()
+doInputRedir :: (Maybe FilePath) -> IO (Maybe Fd)
+doInputRedir Nothing = return Nothing
 doInputRedir (Just input) = do 
     inputFd <- openFd input 
                       ReadOnly 
                       (Just stdFileMode)
                       defaultFileFlags
-    dupCloseFd (Just inputFd) stdInput 
+    return $ Just inputFd
+    --dupCloseFd (Just inputFd) stdInput 
 
-doOutputRedir :: (Maybe FilePath) -> IO ()
-doOutputRedir Nothing = return ()
+doOutputRedir :: (Maybe FilePath) -> IO (Maybe Fd)
+doOutputRedir Nothing = return Nothing
 doOutputRedir (Just output) = do 
     outputFd <- openFd output 
                        ReadWrite 
                        (Just stdFileMode)
                        defaultFileFlags
-    dupCloseFd (Just outputFd) stdOutput 
+    return $ Just outputFd
+    --dupCloseFd (Just outputFd) stdOutput 
 
 launchJob :: (Command, Background) -> IO ()
 launchJob (command, bg) 
@@ -52,8 +54,10 @@ launchJob (command, bg)
             _ <- installHandler sigTTIN Default $ Just saMask
             _ <- installHandler sigINT  Default $ Just saMask
             _ <- waitForTerminal
-            doInputRedir  inputPath
-            doOutputRedir outputPath
+            inputFd  <- doInputRedir  inputPath
+            outputFd <- doOutputRedir outputPath
+            dupCloseFd inputFd  stdInput
+            dupCloseFd outputFd stdOutput
             executeExternal singleCmd
         createProcessGroupFor id
         setTerminalProcessGroupID 0 id
@@ -77,27 +81,27 @@ waitForChildren n
 
 launchPipeline :: (Command, Background) -> IO ()
 launchPipeline (command, bg) = do 
-    let pipe = fromRight [] $ cmd command
-    pipelineLoop 0 Nothing pipe
-    waitForChildren $ length pipe
-    -- status <- getProcessStatus True True (-1)
+    firstInputFd <- doInputRedir  $ input  command
+    lastOutputFd <- doOutputRedir $ output command
+    pipelineLoop 0 firstInputFd lastOutputFd $ fromRight [] $ cmd command  
+    waitForChildren $ length $ fromRight [] $ cmd command
     pgid <- getProcessGroupID
     setTerminalProcessGroupID 0 pgid
     return ()
 
-pipelineLoop :: ProcessGroupID -> (Maybe Fd) -> Pipeline -> IO ()
-pipelineLoop pgid (Just fd) (cmd:[]) = do 
-    pipeProcess pgid ((Just fd), Nothing) cmd
+pipelineLoop :: ProcessGroupID -> (Maybe Fd) -> (Maybe Fd) -> Pipeline -> IO ()
+pipelineLoop pgid (Just fd) lastOutput (command:[]) = do 
+    pipeProcess pgid ((Just fd), lastOutput) command 
     closeFd fd
     return ()
-pipelineLoop pgid input (cmd:rest) = do
+pipelineLoop pgid input lastOutput (command:rest) = do
     (nextInput, output) <- createPipe
-    newPgid <- pipeProcess pgid (input, (Just output)) cmd
+    newPgid <- pipeProcess pgid (input, (Just output)) command
     case input of
         Just fd -> closeFd fd
         Nothing -> return ()
     closeFd output
-    pipelineLoop newPgid (Just nextInput) rest
+    pipelineLoop newPgid (Just nextInput) lastOutput rest
 
 dupCloseFd :: (Maybe Fd) -> Fd -> IO ()
 dupCloseFd (Just fd1) fd2 = dupTo fd1 fd2 >> closeFd fd1 
