@@ -20,36 +20,23 @@ waitForTerminal = do
         then waitForTerminal
         else return ()
 
-inputFileModes :: Maybe FileMode
-inputFileModes = Just $ unionFileModes otherReadMode $
-                        unionFileModes ownerReadMode groupReadMode
-
--- TO DO: refactor
-doRedir :: (Maybe FilePath, Maybe FilePath) -> IO ()
-doRedir (Nothing, Nothing) = return ()
-doRedir (Just input, Nothing) = do
-    inputFd  <- openFd input 
-                       ReadOnly 
-                       inputFileModes 
-                       defaultFileFlags
+doInputRedir :: (Maybe FilePath) -> IO ()
+doInputRedir Nothing = return ()
+doInputRedir (Just input) = do 
+    inputFd <- openFd input 
+                      ReadOnly 
+                      (Just stdFileMode)
+                      defaultFileFlags
     dupCloseFd (Just inputFd) stdInput 
-doRedir (Nothing, Just output) = do
+
+doOutputRedir :: (Maybe FilePath) -> IO ()
+doOutputRedir Nothing = return ()
+doOutputRedir (Just output) = do 
     outputFd <- openFd output 
                        ReadWrite 
                        (Just stdFileMode)
                        defaultFileFlags
     dupCloseFd (Just outputFd) stdOutput 
-doRedir (Just input, Just output) = do
-    inputFd  <- openFd input  
-                       ReadOnly  
-                       inputFileModes  
-                       defaultFileFlags 
-    outputFd <- openFd output 
-                       ReadWrite 
-                       (Just stdFileMode) 
-                       defaultFileFlags 
-    dupCloseFd (Just inputFd)  stdInput
-    dupCloseFd (Just outputFd) stdOutput
 
 launchJob :: (Command, Background) -> IO ()
 launchJob (command, bg) 
@@ -65,8 +52,8 @@ launchJob (command, bg)
             _ <- installHandler sigTTIN Default $ Just saMask
             _ <- installHandler sigINT  Default $ Just saMask
             _ <- waitForTerminal
-            --print outputPath
-            doRedir (inputPath, outputPath)
+            doInputRedir  inputPath
+            doOutputRedir outputPath
             executeExternal singleCmd
         createProcessGroupFor id
         setTerminalProcessGroupID 0 id
